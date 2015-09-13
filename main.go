@@ -3,9 +3,9 @@ package main
 import (
   "github.com/spf13/viper"
   "github.com/mattes/migrate/migrate"
-  "github.com/julienschmidt/httprouter"
+  "github.com/ant0ine/go-json-rest/rest"
   _ "github.com/lib/pq"
-  "database/sql"
+  "github.com/jinzhu/gorm"
   "fmt"
   "net/http"
   "log"
@@ -14,8 +14,9 @@ import (
 func main() {
   readConfig()
   applyMigrations()
-  connectToDb()
-  startChat()
+  i := Impl{}
+  i.connectToDb()
+  i.startChat()
 }
 
 func readConfig() {
@@ -37,48 +38,56 @@ func applyMigrations() {
   }
 }
 
-func connectToDb() {
-  var db *sql.DB
+func (i *Impl) connectToDb() {
   var err error
-
-  db, err = sql.Open("postgres", viper.GetString("database_url"))
-
+  i.DB, err = gorm.Open("postgres", viper.GetString("database_url"))
   if err != nil {
-    fmt.Printf("sql.Open error: %v\n",err)
-    return
+      log.Fatalf("Got error when connect database, the error is '%v'", err)
   }
-
-  defer db.Close()
+  i.DB.LogMode(true)
 }
 
-func startChat() {
-  router := httprouter.New()
+type Impl struct {
+  DB gorm.DB
+}
 
-  router.GET("/", Index)
-  router.GET("/users/:user_id/dialogs", DialogIndex)
-  router.GET("/users/:user_id/dialogs/:dialog_id", DialogShow)
-  router.POST("/users/:user_id/dialogs", DialogCreate)
-  router.POST("/users/:user_id/dialogs/:dialog_id/messages", MessageCreate)
+func (i *Impl) startChat() {
+  api := rest.NewApi()
+  api.Use(rest.DefaultDevStack...)
+  router, err := rest.MakeRouter(
+    rest.Get("/", Index),
+    rest.Get("/users/:user_id/dialogs", i.DialogIndex),
+    rest.Get("/users/:user_id/dialogs/:dialog_id", DialogShow),
+    rest.Post("/users/:user_id/dialogs", DialogCreate),
+    rest.Post("/users/:user_id/dialogs/:dialog_id/messages", MessageCreate),
+  )
+  if err != nil {
+    log.Fatal(err)
+  }
+  api.SetApp(router)
   fmt.Println("address: ", viper.GetString("bind_address"))
-  log.Fatal(http.ListenAndServe(viper.GetString("bind_address"), router))
+  log.Fatal(http.ListenAndServe(viper.GetString("bind_address"), api.MakeHandler()))
 }
 
-func Index(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-  fmt.Fprint(w, "Welcome!\n")
+func Index(w rest.ResponseWriter, r *rest.Request) {
+  w.WriteJson("Welcome!\n")
 }
 
-func DialogIndex(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-  fmt.Fprintf(w, "hello, %s!\n", ps.ByName("user_id"))
+func (i *Impl) DialogIndex(w rest.ResponseWriter, r *rest.Request) {
+  dialogs := []Dialog{}
+  // userId := r.PathParam("user_id")
+  i.DB.Find(&dialogs)
+  w.WriteJson(&dialogs)
 }
 
-func DialogShow(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-  fmt.Fprintf(w, "hello, %s!\n", ps.ByName("dialog_id"))
+func DialogShow(w rest.ResponseWriter, r *rest.Request) {
+  // fmt.Fprintf(w, "hello, %s!\n", ps.ByName("dialog_id"))
 }
 
-func DialogCreate(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-  fmt.Fprintf(w, "create, %s!\n", ps.ByName("user_id"))
+func DialogCreate(w rest.ResponseWriter, r *rest.Request) {
+  // fmt.Fprintf(w, "create, %s!\n", ps.ByName("user_id"))
 }
 
-func MessageCreate(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
-  fmt.Fprintf(w, "create, %s!\n", ps.ByName("dialog_id"))
+func MessageCreate(w rest.ResponseWriter, r *rest.Request) {
+  // fmt.Fprintf(w, "create, %s!\n", ps.ByName("dialog_id"))
 }
