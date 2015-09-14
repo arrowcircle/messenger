@@ -5,10 +5,11 @@ import (
 )
 
 type Message struct {
-  Id           int8
-  Text         string `sql:"type:text"`
-  CreatedAt    time.Time
-  UpdatedAt    time.Time
-  UserId       int
-  DialogId     int8
+  Id           int8           `json:"id"`
+  Text         string         `sql:"type:text" json:"text"`
+  CreatedAt    time.Time      `json:"created_at"`
+  UpdatedAt    time.Time      `json:"updated_at"`
+  UserID       int            `json:"user_id"`
+  DialogID     int8           `json:"dialog_id"`
+  Dialog       Dialog
 }
