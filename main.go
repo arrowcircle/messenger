@@ -76,7 +76,7 @@ func Index(w rest.ResponseWriter, r *rest.Request) {
 func (i *Impl) DialogIndex(w rest.ResponseWriter, r *rest.Request) {
   dialogs := []Dialog{}
   userId := r.PathParam("user_id")
-  i.DB.Table("dialogs").Joins("INNER JOIN dialog_users on dialog_users.dialog_id = dialogs.id").Where("dialog_users.user_id = ?", userId).Find(&dialogs)
+  i.DB.Table("dialogs").Joins("INNER JOIN dialog_users on dialog_users.dialog_id = dialogs.id").Where("dialog_users.user_id = ?", userId).Order("dialogs.updated_at DESC").Find(&dialogs)
   w.WriteJson(&dialogs)
 }
 

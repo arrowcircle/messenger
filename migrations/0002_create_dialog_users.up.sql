@@ -1,6 +1,6 @@
 CREATE TABLE dialog_users(
-  dialog_id int8 not null,
-  user_id int8 not null,
+  dialog_id int not null,
+  user_id int not null,
   created_at timestamp(6),
   updated_at timestamp(6)
 );
