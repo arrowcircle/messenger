@@ -9,6 +9,7 @@ import (
   "fmt"
   "net/http"
   "log"
+  "strconv"
 )
 
 func main() {
@@ -74,9 +75,36 @@ func Index(w rest.ResponseWriter, r *rest.Request) {
 }
 
 func (i *Impl) DialogIndex(w rest.ResponseWriter, r *rest.Request) {
-  dialogs := []Dialog{}
+  dialogs := []DialogJson{}
   userId := r.PathParam("user_id")
-  i.DB.Table("dialogs").Joins("INNER JOIN dialog_users on dialog_users.dialog_id = dialogs.id").Where("dialog_users.user_id = ?", userId).Order("dialogs.updated_at DESC").Find(&dialogs)
+  page, err := strconv.Atoi(r.FormValue("page"))
+  offset := 0
+  if err == nil {
+    offset = (page - 1) * 10
+  }
+
+  i.DB.Raw(`
+    SELECT
+      dialogs.id AS id,
+      dialogs.name AS name,
+      dialogs.created_at AS created_at,
+      dialogs.updated_at AS updated_at,
+      messages.text AS last_message,
+      messages.user_id AS last_message_user_id,
+      dialogs.last_message_id AS last_message_id,
+      du.user_ids
+    FROM dialogs
+    JOIN messages ON messages.id = dialogs.last_message_id
+    JOIN dialog_users ON dialog_users.dialog_id = dialogs.id
+    JOIN (
+        SELECT dialog_users.dialog_id, array_agg(user_id) AS user_ids
+        FROM dialog_users group by dialog_users.dialog_id
+        ) du ON du.dialog_id = dialogs.id
+    WHERE dialog_users.user_id = ?
+    ORDER BY dialogs.last_message_id DESC
+    LIMIT 10
+    OFFSET ?
+    `, userId, offset).Find(&dialogs)
   w.WriteJson(&dialogs)
 }
 

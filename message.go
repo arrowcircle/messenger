@@ -11,5 +11,5 @@ type Message struct {
   UpdatedAt    time.Time      `json:"updated_at"`
   UserID       int            `json:"user_id"`
   DialogID     int8           `json:"dialog_id"`
-  Dialog       Dialog
+  Dialog       *Dialog
 }
