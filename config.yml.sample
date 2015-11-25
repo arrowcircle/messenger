@@ -1,0 +1,2 @@
+database_url: postgres:///chat_development?sslmode=disable
+port: 80
