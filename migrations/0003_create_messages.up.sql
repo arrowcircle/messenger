@@ -1,9 +1,9 @@
 CREATE TABLE messages(
-  id int NOT NULL PRIMARY KEY,
-  dialog_id int NOT NULL,
+  id SERIAL PRIMARY KEY,
+  dialog_id SERIAL NOT NULL,
   text TEXT NOT NULL,
-  user_id int NOT NULL,
-  created_at timestamp(6)
+  user_id SERIAL NOT NULL,
+  created_at timestamp(6) DEFAULT now()
 );
 
 CREATE INDEX index_messages_on_dialog_id ON messages USING btree(dialog_id);

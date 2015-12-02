@@ -14,9 +14,14 @@ import (
 )
 import _ "github.com/mattes/migrate/driver/postgres"
 
+type UserJson struct {
+  Id                  int        `json:"id"`
+  Name                string     `json:"name"`
+}
+
 type DialogJson struct {
-  Id                  uint8        `json:"id"`
-  Name                string       `sql:"size:255" json:"name"`
+  Id                  int          `json:"id"`
+  Name                string       `json:"name"`
   CreatedAt           time.Time    `json:"created_at"`
   UpdatedAt           time.Time    `json:"updated_at"`
   UserIds             string       `json:"user_ids"`
@@ -26,12 +31,24 @@ type DialogJson struct {
   LastSeenMessageID   int          `json:"last_seen_message_id"`
 }
 
+type DialogShowJson struct {
+  Id                  int              `json:"id"`
+  Name                string           `json:"name"`
+  Messages            []MessageJson    `json:"messages"`
+}
+
 type MessageJson struct {
-  Id                  uint8        `json:"id"`
+  Id                  int          `json:"id"`
   Text                string       `json:"text"`
   CreatedAt           time.Time    `json:"created_at"`
-  UserId              uint8        `json:"user_id"`
-  DialogId            uint8        `json:"dialog_id"`
+  UserId              int          `json:"user_id"`
+}
+
+type Message struct {
+  Id                  int          `json:"id"`
+  Text                string       `json:"text"`
+  UserId              int          `json:"user_id"`
+  DialogId            int          `json:"dialog_id"`
 }
 
 func main() {
@@ -79,10 +96,12 @@ func (i *Impl) startChat() {
   api.Use(rest.DefaultDevStack...)
   router, err := rest.MakeRouter(
     rest.Get("/", Index),
-    rest.Get("/users/:user_id/dialogs", i.DialogIndex),
-    rest.Get("/users/:user_id/dialogs/:dialog_id", i.DialogShow),
-    rest.Post("/users/:user_id/dialogs", DialogCreate),
-    rest.Post("/users/:user_id/dialogs/:dialog_id/messages", MessageCreate),
+    rest.Get("/users/:user_id.json", UserShow),
+    rest.Get("/users/:user_id/dialogs.json", i.DialogIndex),
+    rest.Get("/users/:user_id/dialogs/:dialog_id/messages.json", i.MessageIndex),
+    rest.Get("/users/:user_id/dialogs/:dialog_id.json", i.DialogShow),
+    rest.Post("/dialogs", DialogCreate),
+    rest.Post("/users/:user_id/dialogs/:dialog_id/messages.json", i.MessageCreate),
   )
   if err != nil {
     log.Fatal(err)
@@ -139,7 +158,32 @@ func (i *Impl) DialogIndex(w rest.ResponseWriter, r *rest.Request) {
 
 func (i *Impl) DialogShow(w rest.ResponseWriter, r *rest.Request) {
   userId := r.PathParam("user_id")
-  dialogId := r.PathParam("dialog_id")
+  dialogId, _ := strconv.Atoi(r.PathParam("dialog_id"))
+  page, err := strconv.Atoi(r.FormValue("page"))
+  offset := 0
+  if err == nil {
+    offset = (page - 1) * 10
+  }
+  dialog := DialogShowJson{}
+  dialog.Id = dialogId
+  i.DB.Raw(`
+    SELECT * FROM messages
+    WHERE messages.dialog_id = ?
+    ORDER BY messages.id DESC
+    LIMIT 10
+    OFFSET ?
+  `, dialogId, offset).Find(&dialog.Messages)
+
+  last_message_id := 0
+  i.DB.Raw("SELECT last_message_id FROM dialogs WHERE id = ?", dialogId).Row().Scan(&last_message_id)
+  i.DB.Exec("UPDATE dialog_users SET last_seen_message_id = ? WHERE dialog_id = ? AND user_id = ?", last_message_id, dialogId, userId)
+
+  w.WriteJson(&dialog)
+}
+
+func (i *Impl) MessageIndex(w rest.ResponseWriter, r *rest.Request) {
+  userId := r.PathParam("user_id")
+  dialogId, _ := strconv.Atoi(r.PathParam("dialog_id"))
   page, err := strconv.Atoi(r.FormValue("page"))
   offset := 0
   if err == nil {
@@ -161,10 +205,33 @@ func (i *Impl) DialogShow(w rest.ResponseWriter, r *rest.Request) {
   w.WriteJson(&messages)
 }
 
+func UserShow(w rest.ResponseWriter, r *rest.Request) {
+  userId, _ := strconv.Atoi(r.PathParam("user_id"))
+  user := UserJson{}
+  user.Id = userId
+
+  w.WriteJson(&user)
+}
+
 func DialogCreate(w rest.ResponseWriter, r *rest.Request) {
   // fmt.Fprintf(w, "create, %s!\n", ps.ByName("user_id"))
 }
 
-func MessageCreate(w rest.ResponseWriter, r *rest.Request) {
-  // fmt.Fprintf(w, "create, %s!\n", ps.ByName("dialog_id"))
+func (i *Impl) MessageCreate(w rest.ResponseWriter, r *rest.Request) {
+  message := Message{}
+  if err := r.DecodeJsonPayload(&message); err != nil {
+    fmt.Println("error decoding json: ", err)
+		rest.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if err := i.DB.Save(&message).Error; err != nil {
+    fmt.Println("error saving message: ", err)
+		rest.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+  i.DB.Exec("UPDATE dialogs SET last_message_id = ? WHERE dialogs.id = ?", message.Id, message.DialogId)
+  i.DB.Exec("UPDATE dialog_users SET last_seen_message_id = ? WHERE dialog_id = ? AND user_id = ?", message.Id, message.DialogId, message.UserId)
+
+  w.WriteJson(&message)
 }
