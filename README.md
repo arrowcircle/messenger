@@ -1,6 +1,6 @@
 # Messenger Service
 
-[![Build Status](https://travis-ci.org/arrowcircle/chat.svg?branch=master)](https://travis-ci.org/arrowcircle/chat)[![Code Climate](https://codeclimate.com/github/arrowcircle/chat/badges/gpa.svg)](https://codeclimate.com/github/arrowcircle/chat)
+[![Build Status](https://travis-ci.org/arrowcircle/messenger.svg?branch=master)](https://travis-ci.org/arrowcircle/messenger)
 
 # Installation
 
