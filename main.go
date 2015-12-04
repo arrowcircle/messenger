@@ -31,6 +31,20 @@ type DialogJson struct {
   LastSeenMessageID   int          `json:"last_seen_message_id"`
 }
 
+type DialogCreateJson struct {
+  Name                string       `json:"name"`
+  UserIds             []int        `json:"user_ids"`
+  Message             string       `json:"message"`
+}
+
+type Dialog struct {
+  Id                  int           `json:"id"`
+  Name                string        `json:"name"`
+  LastMessageID       int           `json:"last_message_id"`
+  CreatedAt           time.Time     `json:"created_at"`
+  UpdatedAt           time.Time     `json:"updated_at"`
+}
+
 type DialogShowJson struct {
   Id                  int              `json:"id"`
   Name                string           `json:"name"`
@@ -100,7 +114,7 @@ func (i *Impl) startChat() {
     rest.Get("/users/:user_id/dialogs.json", i.DialogIndex),
     rest.Get("/users/:user_id/dialogs/:dialog_id/messages.json", i.MessageIndex),
     rest.Get("/users/:user_id/dialogs/:dialog_id.json", i.DialogShow),
-    rest.Post("/dialogs", DialogCreate),
+    rest.Post("/users/:user_id/dialogs.json", i.DialogCreate),
     rest.Post("/users/:user_id/dialogs/:dialog_id/messages.json", i.MessageCreate),
   )
   if err != nil {
@@ -213,8 +227,44 @@ func UserShow(w rest.ResponseWriter, r *rest.Request) {
   w.WriteJson(&user)
 }
 
-func DialogCreate(w rest.ResponseWriter, r *rest.Request) {
-  // fmt.Fprintf(w, "create, %s!\n", ps.ByName("user_id"))
+func (i *Impl) DialogCreate(w rest.ResponseWriter, r *rest.Request) {
+  dialogJson := DialogCreateJson{}
+  if err := r.DecodeJsonPayload(&dialogJson); err != nil {
+    fmt.Println("error decoding json: ", err)
+		rest.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+  dialog := Dialog{}
+  dialog.Name = dialogJson.Name
+
+	if err := i.DB.Save(&dialog).Error; err != nil {
+    fmt.Println("error saving message: ", err)
+		rest.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+  message := Message{}
+  message.DialogId = dialog.Id
+  message.Text = dialogJson.Message
+
+  if err := i.DB.Save(&message).Error; err != nil {
+    fmt.Println("error saving message: ", err)
+		rest.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+  for _, element := range dialogJson.UserIds {
+    i.DB.Exec("INSERT INTO dialog_users (dialog_id, user_id, last_seen_message_id) VALUES (?, ?, 0)", dialog.Id, element)
+  }
+
+  i.DB.Exec("UPDATE dialogs SET last_message_id = ? WHERE id = ?", message.Id, dialog.Id)
+
+  dialog.LastMessageID = message.Id
+
+  fmt.Println("dialog json: ", dialog.Id)
+
+  w.WriteJson(&dialog)
 }
 
 func (i *Impl) MessageCreate(w rest.ResponseWriter, r *rest.Request) {
