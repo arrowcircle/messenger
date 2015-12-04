@@ -157,9 +157,10 @@ func (i *Impl) DialogIndex(w rest.ResponseWriter, r *rest.Request) {
         dialogs.name AS name,
         dialogs.created_at AS created_at,
         dialogs.updated_at AS updated_at,
+        dialogs.last_message_id AS last_message_id,
         messages.text AS last_message,
         messages.user_id AS last_message_user_id,
-    	dialog_users.last_seen_message_id AS last_seen_message_id
+    	  dialog_users.last_seen_message_id AS last_seen_message_id
       FROM dialogs
       JOIN messages ON messages.id = dialogs.last_message_id
       JOIN dialog_users ON dialog_users.dialog_id = dialogs.id
@@ -172,6 +173,7 @@ func (i *Impl) DialogIndex(w rest.ResponseWriter, r *rest.Request) {
       c.name,
       c.created_at,
       c.updated_at,
+      c.last_message_id,
       c.last_message,
       c.last_message_user_id,
       c.last_seen_message_id
@@ -185,20 +187,38 @@ func (i *Impl) DialogIndex(w rest.ResponseWriter, r *rest.Request) {
 func (i *Impl) DialogShow(w rest.ResponseWriter, r *rest.Request) {
 	userID := r.PathParam("user_id")
 	dialogID, _ := strconv.Atoi(r.PathParam("dialog_id"))
-	page, err := strconv.Atoi(r.FormValue("page"))
-	offset := 0
-	if err == nil {
-		offset = (page - 1) * 10
-	}
-	dialog := DialogShowJSON{}
-	dialog.ID = dialogID
+
+	dialog := DialogJSON{}
 	i.DB.Raw(`
-    SELECT * FROM messages
-    WHERE messages.dialog_id = ?
-    ORDER BY messages.id DESC
-    LIMIT 10
-    OFFSET ?
-  `, dialogID, offset).Find(&dialog.Messages)
+    SELECT c.*, array_agg(du.user_id) AS user_ids
+    FROM
+      (SELECT
+        dialogs.id AS id,
+        dialogs.name AS name,
+        dialogs.created_at AS created_at,
+        dialogs.updated_at AS updated_at,
+        dialogs.last_message_id AS last_message_id,
+        messages.text AS last_message,
+        messages.user_id AS last_message_user_id,
+    	  dialog_users.last_seen_message_id AS last_seen_message_id
+      FROM dialogs
+      JOIN messages ON messages.id = dialogs.last_message_id
+      JOIN dialog_users ON dialog_users.dialog_id = dialogs.id
+      WHERE dialog_users.user_id = ?
+      ORDER BY dialogs.last_message_id DESC
+      ) c
+    JOIN dialog_users du ON c.id = du.dialog_id
+    WHERE c.id = ?
+    GROUP BY
+      c.id,
+      c.name,
+      c.created_at,
+      c.updated_at,
+      c.last_message_id,
+      c.last_message,
+      c.last_message_user_id,
+      c.last_seen_message_id
+  `, userID, dialogID).Find(&dialog)
 
 	lastMessageID := 0
 	i.DB.Raw("SELECT last_message_id FROM dialogs WHERE id = ?", dialogID).Row().Scan(&lastMessageID)
@@ -283,12 +303,16 @@ func (i *Impl) DialogCreate(w rest.ResponseWriter, r *rest.Request) {
 
 // MessageCreate creates message for dialog
 func (i *Impl) MessageCreate(w rest.ResponseWriter, r *rest.Request) {
+	userID, _ := strconv.Atoi(r.PathParam("user_id"))
+	dialogID, _ := strconv.Atoi(r.PathParam("dialog_id"))
 	message := Message{}
 	if err := r.DecodeJsonPayload(&message); err != nil {
 		fmt.Println("error decoding json: ", err)
 		rest.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	message.DialogID = dialogID
+	message.UserID = userID
 	if err := i.DB.Save(&message).Error; err != nil {
 		fmt.Println("error saving message: ", err)
 		rest.Error(w, err.Error(), http.StatusInternalServerError)
