@@ -262,6 +262,7 @@ func UserShow(w rest.ResponseWriter, r *rest.Request) {
 
 // DialogCreate is used to create dialog and message
 func (i *Impl) DialogCreate(w rest.ResponseWriter, r *rest.Request) {
+	userID, _ := strconv.Atoi(r.PathParam("user_id"))
 	dialogJSON := DialogCreateJSON{}
 	if err := r.DecodeJsonPayload(&dialogJSON); err != nil {
 		fmt.Println("error decoding json: ", err)
@@ -281,6 +282,7 @@ func (i *Impl) DialogCreate(w rest.ResponseWriter, r *rest.Request) {
 	message := Message{}
 	message.DialogID = dialog.ID
 	message.Text = dialogJSON.Message
+	message.UserID = userID
 
 	if err := i.DB.Save(&message).Error; err != nil {
 		fmt.Println("error saving message: ", err)
