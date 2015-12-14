@@ -10,7 +10,6 @@ docker:
 	docker run -t arrowcircle/build-messenger /bin/true
 	docker cp `docker ps -q -n=1`:/messenger .
 	docker build --rm=true --tag=arrowcircle/messenger -f Dockerfile .
-	docker push arrowcircle/messenger
 cleanup:
 	docker ps -a | grep arrowcircle/build-messenger | awk '{print $$1}' | xargs docker rm -f
 	docker rmi -f arrowcircle/build-messenger
