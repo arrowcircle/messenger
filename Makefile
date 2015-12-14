@@ -15,8 +15,6 @@ cleanup:
 	docker rmi -f arrowcircle/build-messenger
 travis:
 	@docker login -e $(DOCKER_EMAIL) -u $(DOCKER_USERNAME) -p $(DOCKER_PASS)
-	export REPO=arrowcircle/messenger
-	export TAG=`if [ "$(TRAVIS_BRANCH)" == "master" ]; then echo "latest"; else echo $(TRAVIS_BRANCH) ; fi`
 	make docker
-	docker push $(REPO)
+	docker push arrowcircle/messenger
 
