@@ -16,6 +16,5 @@ cleanup:
 travis:
 	@docker login -e $(DOCKER_EMAIL) -u $(DOCKER_USERNAME) -p $(DOCKER_PASS)
 	make docker
-	docker tag arrowcircle/messenger:$(TRAVIS_TAG) arrowcircle/messenger:$(TRAVIS_TAG)
 	docker tag arrowcircle/messenger:$(TRAVIS_TAG) arrowcircle/messenger:latest
 	docker push arrowcircle/messenger
