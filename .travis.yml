@@ -6,6 +6,7 @@ before_install:
 - go get github.com/golang/lint/golint
 script:
 - golint *.go
+- go get
 - go build *.go
 services:
 - docker
