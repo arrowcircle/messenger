@@ -1,0 +1,5 @@
+FROM golang
+ADD . /go/src/github/messenger
+WORKDIR /go/src/github/messenger
+RUN make build && cp messenger /messenger
+CMD ["/bin/bash"]
