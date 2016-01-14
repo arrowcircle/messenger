@@ -17,8 +17,8 @@ import _ "github.com/mattes/migrate/driver/postgres"
 
 // UserJSON is used for empty requests
 type UserJSON struct {
-	ID   int    `json:"id"`
-	Name string `json:"name"`
+	ID           int `json:"id"`
+	DialogsCount int `json:"dialogs_count"`
 }
 
 // DialogJSON used for index action of API
@@ -119,7 +119,7 @@ func (i *Impl) startChat() {
 	api.Use(rest.DefaultDevStack...)
 	router, err := rest.MakeRouter(
 		rest.Get("/", Index),
-		rest.Get("/users/:user_id.json", UserShow),
+		rest.Get("/users/:user_id.json", i.UserShow),
 		rest.Get("/users/:user_id/dialogs.json", i.DialogIndex),
 		rest.Get("/users/:user_id/dialogs/:dialog_id/messages.json", i.MessageIndex),
 		rest.Get("/users/:user_id/dialogs/:dialog_id.json", i.DialogShow),
@@ -252,11 +252,21 @@ func (i *Impl) MessageIndex(w rest.ResponseWriter, r *rest.Request) {
 	w.WriteJson(&messages)
 }
 
-// UserShow if fake method for rails
-func UserShow(w rest.ResponseWriter, r *rest.Request) {
+// UserShow returns number of unread dialogs
+func (i *Impl) UserShow(w rest.ResponseWriter, r *rest.Request) {
 	userID, _ := strconv.Atoi(r.PathParam("user_id"))
 	user := UserJSON{}
 	user.ID = userID
+	dialogsCount := 0
+	i.DB.Raw(`
+		SELECT COUNT(dialogs.id)
+		FROM dialogs, dialog_users
+		WHERE
+	  dialogs.last_message_id > dialog_users.last_seen_message_id AND
+	  dialog_users.user_id = ? AND
+	  dialog_users.dialog_id = dialogs.id
+	`, user.ID).Row().Scan(&dialogsCount)
+	user.DialogsCount = dialogsCount
 	w.WriteJson(&user)
 }
 
