@@ -177,6 +177,7 @@ func (i *Impl) DialogIndex(w rest.ResponseWriter, r *rest.Request) {
       c.last_message,
       c.last_message_user_id,
       c.last_seen_message_id
+		ORDER BY c.last_message_id DESC
     LIMIT 10
     OFFSET ?
   `, userID, offset).Find(&dialogs)
