@@ -332,7 +332,7 @@ func (i *Impl) MessageCreate(w rest.ResponseWriter, r *rest.Request) {
 		return
 	}
 
-	i.DB.Exec("UPDATE dialogs SET last_message_id = ? AND updated_at = now() WHERE dialogs.id = ?", message.ID, message.DialogID)
+	i.DB.Exec("UPDATE dialogs SET last_message_id = ?, updated_at = now() WHERE dialogs.id = ?", message.ID, message.DialogID)
 	i.DB.Exec("UPDATE dialog_users SET last_seen_message_id = ? WHERE dialog_id = ? AND user_id = ?", message.ID, message.DialogID, message.UserID)
 
 	w.WriteJson(&message)
