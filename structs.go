@@ -8,7 +8,7 @@ import (
 
 // Impl used to provide handler to DB
 type Impl struct {
-	DB gorm.DB
+	DB *gorm.DB
 }
 
 // UserJSON is used for empty requests

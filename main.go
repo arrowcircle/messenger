@@ -4,8 +4,10 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+
 	"github.com/ant0ine/go-json-rest/rest"
 	"github.com/jinzhu/gorm"
+	_ "github.com/jinzhu/gorm/dialects/postgres"
 	_ "github.com/lib/pq"
 	"github.com/mattes/migrate/migrate"
 	"github.com/spf13/viper"
