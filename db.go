@@ -111,37 +111,6 @@ func (i *Impl) ShowUser(userID string) UserJSON {
 	return user
 }
 
-// CreateDialog creates dialog. If ony two people are present, it uses existing dialog
-func (i *Impl) CreateDialog(userID string, params DialogCreateJSON) (Dialog, error) {
-	i.DB.Begin()
-	dialog := Dialog{}
-	dialog.Name = params.Name
-
-	if err := i.DB.Save(&dialog).Error; err != nil {
-		i.DB.Rollback()
-		return dialog, err
-	}
-
-	message := Message{}
-	message.DialogID = dialog.ID
-	message.Text = params.Message
-	message.UserID, _ = strconv.Atoi(userID)
-
-	if err := i.DB.Save(&message).Error; err != nil {
-		i.DB.Rollback()
-		return dialog, err
-	}
-
-	for _, element := range params.UserIds {
-		i.DB.Exec("INSERT INTO dialog_users (dialog_id, user_id, last_seen_message_id) VALUES (?, ?, 0)", dialog.ID, element)
-	}
-	i.DB.Exec("UPDATE dialogs SET last_message_id = ? WHERE id = ?", message.ID, dialog.ID)
-	dialog.LastMessageID = message.ID
-
-	i.DB.Commit()
-	return dialog, nil
-}
-
 // CreateMessage inserts message in db
 func (i *Impl) CreateMessage(userID string, dialogID int, message Message) (Message, error) {
 	message.DialogID = dialogID
@@ -155,6 +124,63 @@ func (i *Impl) CreateMessage(userID string, dialogID int, message Message) (Mess
 	i.DB.Exec("UPDATE dialog_users SET last_seen_message_id = ? WHERE dialog_id = ? AND user_id = ?", message.ID, message.DialogID, message.UserID)
 
 	return message, nil
+}
+
+// CreateDialog creates dialog. If ony two people are present, it uses existing dialog
+func (i *Impl) CreateDialog(userID string, params DialogCreateJSON) (Dialog, error) {
+	dialog, err := i.FindDialogByUserIds(params)
+	if err != nil {
+		dialog := Dialog{}
+		dialog.Name = params.Name
+		if err := i.DB.Save(&dialog).Error; err != nil {
+			return dialog, err
+		}
+	}
+
+	message := Message{}
+	message.DialogID = dialog.ID
+	message.Text = params.Message
+	message.UserID, _ = strconv.Atoi(userID)
+
+	if err := i.DB.Save(&message).Error; err != nil {
+		return dialog, err
+	}
+
+	for _, element := range params.UserIds {
+		i.DB.Exec("INSERT INTO dialog_users (dialog_id, user_id, last_seen_message_id) VALUES (?, ?, 0)", dialog.ID, element)
+	}
+	i.DB.Exec("UPDATE dialogs SET last_message_id = ? WHERE id = ?", message.ID, dialog.ID)
+	dialog.LastMessageID = message.ID
+
+	return dialog, nil
+}
+
+// FindDialogByUserIds return dialog for two users if it exists
+func (i *Impl) FindDialogByUserIds(params DialogCreateJSON) (Dialog, error) {
+	dialogID := 0
+	if len(params.UserIds) == 2 {
+		i.DB.Raw(`SELECT dialog_users.dialog_id
+    FROM dialog_users
+    WHERE dialog_users.user_id = ?
+    UNION
+    SELECT dialog_users.dialog_id
+    FROM dialog_users
+    WHERE dialog_users.user_id = ?
+    ORDER BY dialog_id DESC
+    LIMIT 1`, params.UserIds[0], params.UserIds[1]).Row().Scan(&dialogID)
+	}
+
+	dialog := Dialog{}
+	if dialogID == 0 {
+		dialog.Name = params.Name
+		if err := i.DB.Save(&dialog).Error; err != nil {
+			return dialog, err
+		}
+	} else {
+		i.DB.Find(&dialog, dialogID)
+	}
+
+	return dialog, nil
 }
 
 // UpdateLastMessage sets last_message_id for dialog
