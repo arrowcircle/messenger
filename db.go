@@ -159,15 +159,15 @@ func (i *Impl) CreateDialog(userID string, params DialogCreateJSON) (Dialog, err
 func (i *Impl) FindDialogByUserIds(params DialogCreateJSON) (Dialog, error) {
 	dialogID := 0
 	if len(params.UserIds) == 2 {
-		i.DB.Raw(`SELECT dialog_users.dialog_id
-    FROM dialog_users
-    WHERE dialog_users.user_id = ?
-    UNION
-    SELECT dialog_users.dialog_id
-    FROM dialog_users
-    WHERE dialog_users.user_id = ?
-    ORDER BY dialog_id DESC
-    LIMIT 1`, params.UserIds[0], params.UserIds[1]).Row().Scan(&dialogID)
+		u1 := params.UserIds[0]
+		u2 := params.UserIds[1]
+		i.DB.Raw(`SELECT dialog_id
+			FROM dialog_users
+			WHERE user_id = ?::integer OR user_id = ?::integer
+			GROUP BY dialog_id
+			HAVING COUNT(user_id) = 2 AND array_agg(user_id ORDER BY user_id) @> array[?::integer, ?::integer]
+			ORDER BY dialog_id ASC
+			LIMIT 1`, u1, u2, u1, u2).Row().Scan(&dialogID)
 	}
 
 	dialog := Dialog{}
